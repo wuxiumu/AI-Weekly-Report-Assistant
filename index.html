@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chatbot 新闻列表</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial; background: #fafbfc; margin: 0; }
+    .container { max-width: 100%;width: 880px; margin: 32px auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 24px #dbe4ea26; padding: 32px; }
+    h1 { margin-bottom: 18px; }
+    .search-bar { margin-bottom: 20px; }
+    .news-list { list-style: none; padding: 0; margin: 0; }
+    .news-list li { padding: 12px 0; border-bottom: 1px solid #f1f1f1; }
+    .news-list li:last-child { border-bottom: none; }
+    .news-title { font-size: 17px; text-decoration: none; color: #222; }
+    .news-title:hover { color: #3578e5; text-decoration: underline; }
+    .pagination { margin-top: 20px; text-align: center; }
+    .pagination button { margin: 0 5px; padding: 6px 16px; border: none; background: #eee; border-radius: 5px; cursor: pointer; }
+    .pagination button.active { background: #3578e5; color: #fff; font-weight: bold; }
+    /* Markdown 内容样式 */
+    .markdown-body { max-width: 880px; margin: 0 auto; padding: 0; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin-top: 24px; }
+    .markdown-body code { background: #f6f8fa; border-radius: 4px; padding: 2px 6px; }
+    .markdown-body pre { background: #f6f8fa; border-radius: 6px; padding: 12px; }
+    .back-btn { margin-bottom: 18px; display: inline-block; background: #eee; border-radius: 5px; padding: 4px 12px; color: #3578e5; font-size: 15px; text-decoration: none; }
+    .back-btn:hover { background: #3578e5; color: #fff; }
+
+    /* 悬浮按钮样式 */
+    #backToTop, #helpBtn {
+      position: fixed;
+      right: 36px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px #ccc;
+      background: #3578e5;
+      color: #fff;
+      border: none;
+      font-size: 21px;
+      cursor: pointer;
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s;
+    }
+    #backToTop { bottom: 88px; }
+    #helpBtn { bottom: 30px; }
+    #backToTop.show, #helpBtn.show { display: flex; opacity: 1; }
+    #backToTop:hover, #helpBtn:hover { background: #2747b2; }
+  </style>
+  <link rel="shortcut icon" href="./chatDoc/chatDoc.php">
+  <!-- 引入 marked.js CDN -->
+<!-- marked.js -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- highlight.js 主题/JS -->
+<!--<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.css">-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<!-- highlightjs 行号插件 -->
+<script src="https://cdn.jsdelivr.net/gh/wcoder/highlightjs-line-numbers.js/dist/highlightjs-line-numbers.min.js"></script>
+<style>
+/* 目录样式 */
+.toc-list { margin:20px 0 32px 0; padding:0; list-style:none; border-left:2px solid #eee;}
+.toc-list li { margin: 2px 0 2px 12px; padding-left:6px; line-height: 1.7;}
+.toc-list li.active > a { color:#3578e5; font-weight:bold;}
+.toc-list a { color: #333; text-decoration:none; font-size:15px; }
+.toc-list a:hover { text-decoration:underline; }
+.hljs-ln-numbers { color:#b0b0b0 !important; font-size:12px;}
+
+/* 目录样式+吸顶+折叠 */
+#article-toc-wrapper {
+  position: sticky;
+  top: 18px;
+  z-index: 88;
+  background: #fff;
+  padding: 12px 0 12px 0;
+  margin-bottom: 32px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px #dbe4ea18;
+}
+.toc-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  user-select: none;
+}
+#toc-toggle-btn {
+  margin-left: 8px;
+  font-size: 14px;
+  padding: 0 8px;
+  color: #3578e5;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+#toc-toggle-btn:hover { color: #fa4242; }
+.toc-list {
+  margin:0;
+  padding:0;
+  list-style:none;
+  border-left:2px solid #eee;
+  transition: max-height .35s cubic-bezier(.19,1,.22,1);
+  overflow: hidden;
+}
+.markdown-body pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 12px;
+}
+.markdown-body pre {
+  border-radius: 6px;
+  padding: 12px;
+  /* background 不要覆盖深色主题 */
+}
+</style>
+</head>
+<body>
+<div class="container" id="mainContainer">
+  <!-- 内容动态渲染，这里只占位 -->
+</div>
+<!-- 返回顶部&帮助 悬浮按钮 -->
+<button id="backToTop" title="返回顶部">↑</button>
+<button id="helpBtn" title="获取帮助">?</button>
+<script>
+  // =========== 1. 新闻数据 ===========
+  let newsData = [];
+  // =========== 2. Mock 文章数据 ===========
+  // 实际项目你可以用 AJAX 取后端接口
+  let articleData = {};
+
+  // =========== 3. 工具：解析 URL 参数 ===========
+  function getQuery(key) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(key);
+  }
+
+  // =========== 4. 渲染文章详情页 ===========
+  // 文章详情页，支持上一篇、下一篇、返回目录
+  function renderArticlePage(docId) {
+    const main = document.getElementById("mainContainer");
+    // 先ajax加载新闻目录，保证页面刷新、直接跳转都可用
+    fetch("./chatDoc/chatDoc.json")
+      .then(res => res.json())
+      .then(data => {
+        newsData = data.data;
+        // 找当前文章索引
+        let idx = newsData.findIndex(item => {
+            // URL参数通常是 ?chatDoc=xxx
+            let itemDoc = "";
+            try {
+                itemDoc = decodeURIComponent((item.url || '').split('chatDoc=')[1] || "");
+            } catch(e) {}
+            return itemDoc === docId;
+        });
+        // 加载文章内容
+        fetch("./chatDoc/" + docId + ".md")
+         .then(res => res.text())
+         .then(content => {
+           // 渲染正文，先用 marked 生成 HTML
+            let html = marked.parse(content || "# 文章未找到\n请返回首页。");
+             // 上一篇/下一篇逻辑
+            let prevBtn = "", nextBtn = "", backBtn = "";
+            if (idx > 0) {
+                let prev = newsData[idx - 1];
+                let prevDoc = (prev.url || '').split('chatDoc=')[1] || "";
+                prevBtn = `<a href="?chatDoc=${prevDoc}" class="back-btn" style="margin-right:14px;">↑ 上一篇</a>`;
+            }
+            if (idx >= 0 && idx < newsData.length - 1) {
+                let next = newsData[idx + 1];
+                let nextDoc = (next.url || '').split('chatDoc=')[1] || "";
+                nextBtn = `<a href="?chatDoc=${nextDoc}" class="back-btn" style="margin-left:14px;">下一篇 ↓</a>`;
+            }
+            // 返回目录（带条件判断，兼容直接访问文章页）
+            backBtn = `<a href="index.html" class="back-btn" style="margin-left:14px;">← 返回目录</a>`;
+            // 1. 自动生成目录 TOC
+            // 先解析所有 h1/h2/h3，构建 tocList
+           // 1. 自动生成目录 TOC
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const headings = tempDiv.querySelectorAll('h1, h2, h3');
+            let tocList = [];
+            headings.forEach(h => {
+                const text = h.textContent;
+                const id = 'toc-' + Math.random().toString(36).slice(2,8);
+                h.id = id;
+                tocList.push({id, text, level: parseInt(h.tagName.slice(1))});
+            });
+            // 文章详情页渲染
+            main.innerHTML = `
+                <div style="margin-bottom:16px;">
+                    ${prevBtn}${backBtn}${nextBtn}
+                </div>
+                <div class="markdown-body">${marked.parse(content || "# 文章未找到\n请返回首页。")}</div>
+                <div style="margin-top:28px;text-align:center;">
+                    ${prevBtn}${backBtn}${nextBtn}
+                </div>
+            `;
+            // 目录HTML（带吸顶和折叠按钮）
+            let tocHtml = `
+              <div id="article-toc-wrapper">
+                <div class="toc-header">
+                  <strong style="font-size:15px;">目录</strong>
+                  <button id="toc-toggle-btn" title="折叠/展开目录">折叠</button>
+                </div>
+                <ul class="toc-list" id="tocListUl">
+                  ${tocList.map(item=>`
+                    <li class="toc-level-${item.level}"><a href="#${item.id}">${item.text}</a></li>
+                  `).join('')}
+                </ul>
+              </div>
+            `;
+            // 替换正文HTML（加上 id）
+            html = tempDiv.innerHTML;
+
+            // 2. 渲染文章页
+            main.innerHTML = `
+                <div style="margin-bottom:16px;">
+                    ${prevBtn}${backBtn}${nextBtn}
+                </div>
+                <div id="article-toc">${tocHtml}</div>
+                <div class="markdown-body" id="article-body">${html}</div>
+                <div style="margin-top:28px;text-align:center;">
+                    ${prevBtn}${backBtn}${nextBtn}
+                </div>
+            `;
+
+            // 3. 代码高亮 + 行号
+            document.querySelectorAll('#article-body pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            // 行号：**注意必须等高亮后调用**
+            hljs.initLineNumbersOnLoad();
+
+            // 4. 目录高亮滚动
+            function updateTOCHighlight() {
+                let fromTop = window.scrollY + 90; // 偏移90防止顶栏
+                let currentId = null;
+                tocList.forEach(item => {
+                    const el = document.getElementById(item.id);
+                    if (el && el.offsetTop < fromTop) currentId = item.id;
+                });
+                document.querySelectorAll('.toc-list li').forEach(li => {
+                    li.classList.remove('active');
+                    if (li.querySelector(`a[href="#${currentId}"]`)) li.classList.add('active');
+                });
+            }
+            window.addEventListener('scroll', updateTOCHighlight, {passive:true});
+            updateTOCHighlight();
+
+            // 5. 点击目录平滑滚动
+            document.querySelectorAll('.toc-list a').forEach(a => {
+                a.onclick = function(e) {
+                    e.preventDefault();
+                    const target = document.getElementById(this.getAttribute('href').slice(1));
+                    if (target) {
+                        window.scrollTo({top: target.offsetTop - 70, behavior: "smooth"});
+                    }
+                };
+            });
+
+            // 6. 目录折叠/展开按钮逻辑
+            const tocListUl = document.getElementById("tocListUl");
+            const tocToggleBtn = document.getElementById("toc-toggle-btn");
+            let tocCollapsed = false;
+            tocToggleBtn.onclick = function() {
+                tocCollapsed = !tocCollapsed;
+                if (tocCollapsed) {
+                    tocListUl.classList.add("toc-collapsed");
+                    this.textContent = "展开";
+                } else {
+                    tocListUl.classList.remove("toc-collapsed");
+                    this.textContent = "折叠";
+                }
+            };
+
+
+         })
+         .catch(err => {
+            main.innerHTML = `<div class="markdown-body"><h2>文章加载失败</h2><p>${err}</p></div>`;
+         });
+      });
+  }
+
+  // =========== 5. 渲染新闻列表 ===========
+  // 分页
+  const pageSize = 15;
+  let currentPage = 1;
+  let filteredData = newsData;
+
+  function renderNewsList() {
+      // ajax
+      var url = "./chatDoc/chatDoc.json?"+new Date().getTime();
+      fetch(url)
+       .then(res => res.json())
+       .then(data => {
+            newsData = data.data;
+            filteredData = newsData; // 必须同步
+            currentPage = 1;         // 分页重置
+            const main = document.getElementById("mainContainer");
+            main.innerHTML = `
+              <h1>AI资讯列表</h1>
+              <input type="text" id="searchInput" class="search-bar" placeholder="搜索AI新闻标题..." style="width:100%;padding:10px;font-size:15px;">
+              <ul class="news-list" id="newsList"></ul>
+              <div class="pagination" id="pagination"></div>
+            `;
+            renderNews();
+            document.getElementById("searchInput").addEventListener("input", function() {
+              const kw = this.value.trim().toLowerCase();
+              filteredData = newsData.filter(item => item.title.toLowerCase().includes(kw));
+              currentPage = 1;
+              renderNews();
+            });
+        })
+       .catch(err => console.error(err));
+  }
+
+  function renderNews() {
+    const newsList = document.getElementById("newsList");
+    newsList.innerHTML = "";
+    const start = (currentPage - 1) * pageSize;
+    const pageData = filteredData.slice(start, start + pageSize);
+    if (pageData.length === 0) {
+      newsList.innerHTML = "<li style='color:#999;'>没有找到相关新闻。</li>";
+    } else {
+      pageData.forEach(item => {
+          item.title = decodeURIComponent(item.title);          // title 解码
+        const li = document.createElement("li");
+        li.innerHTML = `<a href="${item.url}" class="news-title">${item.title}</a>`;
+        newsList.appendChild(li);
+      });
+    }
+    renderPagination();
+  }
+
+  function renderPagination() {
+    const pagination = document.getElementById("pagination");
+    pagination.innerHTML = "";
+    const pageCount = Math.ceil(filteredData.length / pageSize);
+    if (pageCount <= 1) return;
+    for (let i = 1; i <= pageCount; i++) {
+      const btn = document.createElement("button");
+      btn.textContent = i;
+      if (i === currentPage) btn.classList.add("active");
+      btn.onclick = () => { currentPage = i; renderNews(); };
+      pagination.appendChild(btn);
+    }
+  }
+
+  // =========== 6. 启动渲染 ===========
+  const chatDocId = getQuery("chatDoc");
+  if (chatDocId) {
+    renderArticlePage(chatDocId);
+  } else {
+    renderNewsList();
+  }
+
+  // 返回顶部 & 帮助 按钮逻辑
+    const backToTop = document.getElementById("backToTop");
+    const helpBtn = document.getElementById("helpBtn");
+    window.addEventListener("scroll", function() {
+      if (window.scrollY > 240) {
+        backToTop.classList.add("show");
+        helpBtn.classList.add("show");
+      } else {
+        backToTop.classList.remove("show");
+        helpBtn.classList.remove("show");
+      }
+    });
+    backToTop.onclick = () => window.scrollTo({top:0,behavior:"smooth"});
+    helpBtn.onclick = () => {
+      alert("AI新闻助手小提示：\n\n1. 支持搜索和分页；\n2. 点击标题阅读AI资讯详情；\n3. 详情页支持Markdown排版。\n\n如需更多帮助，请联系站长或查看帮助中心。");
+    };
+
+    function renderPagination() {
+      const pagination = document.getElementById("pagination");
+      pagination.innerHTML = "";
+      const pageCount = Math.ceil(filteredData.length / pageSize);
+      if (pageCount <= 1) return;
+      // 上一页
+      const prevBtn = document.createElement("button");
+      prevBtn.textContent = "上一页";
+      prevBtn.disabled = currentPage === 1;
+      prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderNews(); } };
+      pagination.appendChild(prevBtn);
+
+      // 页码按钮
+      for (let i = 1; i <= pageCount; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i;
+        if (i === currentPage) btn.classList.add("active");
+        btn.onclick = () => { currentPage = i; renderNews(); };
+        pagination.appendChild(btn);
+      }
+      // 下一页
+      const nextBtn = document.createElement("button");
+      nextBtn.textContent = "下一页";
+      nextBtn.disabled = currentPage === pageCount;
+      nextBtn.onclick = () => { if (currentPage < pageCount) { currentPage++; renderNews(); } };
+      pagination.appendChild(nextBtn);
+    }
+</script>
+</body>
+</html>
